@@ -1,4 +1,4 @@
-from motion_detection import detect_motion
+from human_detection import detect_humans
 
 if __name__ == "__main__":
-    detect_motion()
+    detect_humans()
