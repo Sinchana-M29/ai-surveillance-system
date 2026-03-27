@@ -1,4 +1,4 @@
-from camera import start_camera
+from motion_detection import detect_motion
 
 if __name__ == "__main__":
-    start_camera()
+    detect_motion()
