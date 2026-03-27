@@ -1,4 +1,4 @@
-from human_detection import detect_humans
+from intruder_detection import detect_intruder
 
 if __name__ == "__main__":
-    detect_humans()
+    detect_intruder()
