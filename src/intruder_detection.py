@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import cv2
 import os
 from datetime import datetime
+from face_module import load_known_faces, recognize_face
 
 # Mouse drawing variables
 drawing = False
@@ -31,11 +32,19 @@ def detect_intruder():
     model = YOLO("yolov8n.pt")
     cap = cv2.VideoCapture(0)
 
+    # Load known faces
+    load_known_faces()
+
     # Create logs folder
     if not os.path.exists("logs"):
         os.makedirs("logs")
 
     last_saved_time = None
+
+    # Face detector
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
 
     cv2.namedWindow("Intruder Detection")
     cv2.setMouseCallback("Intruder Detection", draw_rectangle)
@@ -47,14 +56,17 @@ def detect_intruder():
 
         results = model(frame)
 
+        # Detect faces
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
         for result in results:
             for box in result.boxes:
                 cls = int(box.cls[0])
 
-                if cls == 0:  # person detected
+                if cls == 0:  # person
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-                    # Draw bounding box
                     cv2.rectangle(frame, (x1, y1), (x2, y2),
                                   (0, 255, 0), 2)
 
@@ -63,38 +75,51 @@ def detect_intruder():
                                 cv2.FONT_HERSHEY_SIMPLEX,
                                 0.7, (0, 255, 0), 2)
 
-                    # Check intrusion
-                    if zone:
-                        zx1, zy1, zx2, zy2 = zone
+        # Face recognition logic
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y+h, x:x+w]
+            name = recognize_face(face_img)
 
-                        if (x1 < zx2 and x2 > zx1 and
-                                y1 < zy2 and y2 > zy1):
+            if name == "Unknown":
+                cv2.putText(frame, "UNKNOWN",
+                            (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.9, (0, 0, 255), 2)
 
-                            # ALERT
-                            cv2.putText(frame, "INTRUDER ALERT!",
-                                        (50, 50),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        1.2, (0, 0, 255), 3)
+                # Check zone intrusion
+                if zone:
+                    zx1, zy1, zx2, zy2 = zone
 
-                            current_time = datetime.now()
+                    if (x < zx2 and x+w > zx1 and
+                            y < zy2 and y+h > zy1):
 
-                            # Save every 5 seconds
-                            if last_saved_time is None or \
-                               (current_time - last_saved_time).seconds > 5:
+                        cv2.putText(frame, "INTRUDER ALERT!",
+                                    (50, 50),
+                                    cv2.FONT_HERSHEY_SIMPLEX,
+                                    1.2, (0, 0, 255), 3)
 
-                                timestamp = current_time.strftime(
-                                    "%Y%m%d_%H%M%S")
+                        current_time = datetime.now()
 
-                                filename = f"logs/intruder_{timestamp}.jpg"
-                                cv2.imwrite(filename, frame)
+                        if last_saved_time is None or \
+                           (current_time - last_saved_time).seconds > 5:
 
-                                with open("logs/log.txt", "a") as f:
-                                    f.write(
-                                        f"Intruder detected at {timestamp}\n")
+                            timestamp = current_time.strftime("%Y%m%d_%H%M%S")
 
-                                last_saved_time = current_time
+                            filename = f"logs/intruder_{timestamp}.jpg"
+                            cv2.imwrite(filename, frame)
 
-        # Draw restricted zone
+                            with open("logs/log.txt", "a") as f:
+                                f.write(f"Intruder detected at {timestamp}\n")
+
+                            last_saved_time = current_time
+
+            else:
+                cv2.putText(frame, f"Authorized: {name}",
+                            (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7, (0, 255, 0), 2)
+
+        # Draw zone
         if zone:
             zx1, zy1, zx2, zy2 = zone
             cv2.rectangle(frame, (zx1, zy1), (zx2, zy2),
